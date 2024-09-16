@@ -376,7 +376,22 @@ local infer_group_type = function(group_def)
   return nil, "failure_to_infer_group_type"
 end
 
-local define_group = function(
+-- Convert a native highlight definition map to a lush group definition.
+-- Assumes links have been resolved elsewhere, see :h nvim_get_hl()
+local function hl2def(hl)
+  local def = {}
+  for k, v in pairs(hl) do
+    -- convert unnamed colours from their decimal representation
+    if (k == "fg" or k == "bg" or k == "sp") and tonumber(v) then
+      def[k] = string.format("#%06x", v)
+    else
+      def[k] = v
+    end
+  end
+  return def
+end
+
+local function define_group(
   lush_spec_env,
   group_lookup,
   group_name,
@@ -401,6 +416,14 @@ local define_group = function(
   local group_type = infer_group_type(group_def)
   -- not implemented, validations done in wrap_<type>
   -- local _, err = enforce_group_type(type, group_def)
+
+  -- Treat a string in the link position as the name of a highlight group in the
+  -- global namespace, and recursively build a path of lush groups to its root.
+  if group_def[1] and type(group_def[1]) == "string" then
+    local link_hl = vim.api.nvim_get_hl(0, { name = group_def[1] })
+    local link_def = link_hl["link"] and { link_hl["link"] } or hl2def(link_hl)
+    group_def[1] = define_group(lush_spec_env, group_lookup, group_def[1], {}, link_def)
+  end
 
   -- If a value is in the lush_spec_env, it's a group def,
   -- we need to flag this early here, so we can check for
