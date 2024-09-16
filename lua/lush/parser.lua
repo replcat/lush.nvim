@@ -92,14 +92,14 @@ local enforce_generic_group_name = function(name, opts)
 end
 
 local enforce_generic_definition_type = function(name, opts)
-  if type(opts) ~= "table" or opts == {} then
+  if opts and type(opts) ~= "table" then
     -- !{} or {} or { group, group, ... } -> invalid
     return parser_error.invalid_group_options({on = name})
   end
 end
 
 local enforce_generic_one_parent = function(name, opts)
-  if #opts > 1 then
+  if opts and #opts > 1 then
     return parser_error.too_many_parents({on = name})
   end
 end
@@ -412,6 +412,13 @@ local function define_group(
   local group = group_placeholder
   local err = enforce(enforcements, group_name, group_def)
   if err then return resolves_as_error(err) end
+
+  -- Treat groups called without arguments (think: "unit" groups) as inheriting
+  -- the properties of any matching group in the global namespace.
+  if not group_def then
+    local group_hl = vim.api.nvim_get_hl(0, { name = group_name })
+    group_def = group_hl["link"] and { group_hl["link"] } or hl2def(group_hl)
+  end
 
   local group_type = infer_group_type(group_def)
   -- not implemented, validations done in wrap_<type>
